@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PS - Time Motion Stopwatch</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&display=swap">
+<style>
+:root{--bg:#F6F5F8;--surface:#fff;--ink:#17141F;--muted:#6B6578;--line:#E4E1EA;--accent:#6B3FE0;--on-accent:#fff;--alt:#F1EFF6;--track:#E7E2F5;--tick:#BDB6CF;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121018;--surface:#1B1824;--ink:#F2EFFA;--muted:#A099B3;--line:#2E2A3A;--accent:#9B7BFF;--on-accent:#14101F;--alt:#211E2C;--track:#2B2640;--tick:#4A4361;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121018;--surface:#1B1824;--ink:#F2EFFA;--muted:#A099B3;--line:#2E2A3A;--accent:#9B7BFF;--on-accent:#14101F;--alt:#211E2C;--track:#2B2640;--tick:#4A4361;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:500 15px/1.4 Manrope,system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;padding:12px 16px;max-width:1400px;margin:0 auto}.top h1{grid-column:2}
+h1{margin:0;font-size:17px;font-weight:800;letter-spacing:-.01em;text-align:center}
+.tools{display:flex;gap:6px;justify-content:flex-end}
+.ib,.ghost{background:transparent;border:1px solid var(--line);border-radius:10px;height:40px;min-width:40px;display:inline-grid;place-items:center;cursor:pointer;padding:0 12px;color:var(--ink)}
+.ib{padding:0;width:40px}
+.ghost{justify-self:start;font-size:13px;font-weight:700;color:var(--muted)}
+.ib:hover,.ghost:hover{border-color:var(--accent)}
+svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ── Mobile-first: single column ── */
+.app{max-width:1400px;margin:0 auto;padding:8px 16px 0;display:grid;gap:16px;grid-template-areas:"clock" "agent" "laps" "controls"}
+
+/* Column 2: Agent / Lap Type / Issue Type / Ticket ID / Notes panel */
+.agent{grid-area:agent;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.row-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field-header{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.field label{font-size:13px;font-weight:700;color:var(--muted);margin:0}
+.field select,.field input{width:100%;height:40px;border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:0 10px;box-sizing:border-box}
+.agent p#ainfo{margin:0;font-size:12px;color:var(--muted)}
+.agent.locked{background:var(--alt)}.agent select:disabled,.agent input:disabled{opacity:.55;cursor:not-allowed}
+
+/* Note field inside agent panel */
+.note-panel{display:flex;flex-direction:column;gap:6px}
+.note-panel label{font-size:13px;font-weight:700;color:var(--muted);margin:0}
+.note-panel textarea{width:100%;min-height:90px;resize:vertical;border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:8px 10px;font-size:14px;line-height:1.5;color:var(--ink)}
+.note-panel textarea:focus{outline:3px solid var(--accent);outline-offset:2px}
+.note-panel .note-hint{font-size:12px;color:var(--muted);margin:0}
+
+/* Inline blocked-char tooltip */
+.note-block-msg{font-size:12px;color:#E5484D;min-height:16px;margin:0;opacity:0;transition:opacity .15s}
+.note-block-msg.show{opacity:1}
+
+.pill,.sesbar span{flex:none;font-size:12px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 10px}
+.sesbar{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px;font-size:14px;font-weight:800;flex-wrap:wrap}
+.sesbar span.rec{color:var(--accent);border-color:var(--accent)}
+.row.sep{box-shadow:inset 0 3px 0 var(--track)}
+.clock{grid-area:clock;display:grid;justify-items:center;padding:8px 0}
+.ring{width:min(78vw,320px);aspect-ratio:1;position:relative;container-type:inline-size}
+.ring svg{position:absolute;inset:0;width:100%;height:100%}
+.readout{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+#digits{font-size:14cqw;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
+#cs{font-size:6cqw;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:2cqw}
+.controls{grid-area:controls;position:sticky;bottom:0;z-index:5;display:flex;justify-content:center;align-items:flex-start;gap:clamp(10px,4vw,26px);padding:12px 16px calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,var(--bg) 24%)}
+.c{display:grid;justify-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--muted)}
+.c button{border-radius:50%;border:1px solid var(--line);background:var(--surface);cursor:pointer;display:grid;place-items:center;width:64px;height:64px;transition:transform .08s}
+.c button:active{transform:scale(.94)}
+.c button:disabled{opacity:.4;cursor:not-allowed}
+.c .main{width:88px;height:88px;background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.c .main svg.i{width:34px;height:34px;fill:currentColor}
+.c.mid{margin-top:-12px}
+.laps{grid-area:laps;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;min-width:0}
+.lh{display:flex;justify-content:space-between;align-items:baseline;padding:14px 16px;border-bottom:1px solid var(--line)}
+.lh h2{margin:0;font-size:16px;font-weight:800}
+.lh span{color:var(--muted);font-size:13px}
+.lh{align-items:center}.lh>div{display:flex;gap:10px;align-items:baseline}
+.lh .ghost{height:36px;color:var(--ink);font-size:13px}
+.ag{display:block;font-size:12px;color:var(--muted)}.agm{display:none}
+ol{list-style:none;margin:0;padding:0}
+.laps{--gcols:88px 46px 106px 112px 106px minmax(110px,1fr) minmax(110px,1fr) 90px minmax(140px,1.3fr)}
+.scroll{overflow-x:auto}.tbl.sized{width:max-content;min-width:100%}
+.cols,.row{display:grid;grid-template-columns:var(--gcols);gap:12px;align-items:center;padding:0 16px}
+.cols>span{position:relative;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rz{position:absolute;top:0;right:0;width:10px;height:100%;cursor:col-resize;touch-action:none;z-index:1}
+.rz::after{content:'';position:absolute;right:0;top:9px;bottom:9px;width:2px;border-radius:1px;background:var(--line)}
+.rz:hover::after,.rz:focus-visible::after,.rz.on::after{background:var(--accent)}.rz:focus-visible{outline:none}
+body.resizing{cursor:col-resize;user-select:none}
+.cols{height:36px;font-size:12px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--line)}
+.row{min-height:52px;font-variant-numeric:tabular-nums}
+.row.odd{background:var(--alt)}
+.row .d{font-weight:800;color:var(--accent)}
+.row .cs,.cs2{color:var(--muted);font-size:.8em}
+.row select,.row input{width:100%;height:36px;border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:0 8px}
+.row b{font-weight:800}
+.empty{padding:40px 16px;text-align:center;color:var(--muted)}
+.note-live{min-height:20px;text-align:center;font-size:13px;color:var(--muted)}
+dialog{border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--ink);width:min(440px,92vw);padding:20px}
+dialog::backdrop{background:rgba(10,8,16,.55)}
+dialog{max-height:90vh;overflow:auto}
+dialog h2{margin:0 0 12px;font-size:18px}
+dialog select{width:100%;height:40px;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:0 10px}
+.hint{margin:6px 0 0;font-size:12px;color:var(--muted)}.hint.err{color:#E5484D}
+dialog label{display:block;font-size:13px;font-weight:700;color:var(--muted);margin:14px 0 6px}
+dialog input{width:100%;height:40px;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:0 10px}
+.tl{display:grid;gap:6px;margin:0;padding:0}
+.tl li{display:flex;gap:8px;align-items:center}
+.tl span{flex:1}
+.pri{background:var(--accent);color:var(--on-accent);border:0;border-radius:10px;height:40px;padding:0 16px;font-weight:700;cursor:pointer}
+.add{display:flex;gap:8px;margin-top:8px}
+
+/* ── Large screen: 2-column top + full-width laps bottom ── */
+@media (min-width:1100px){
+  .app{
+    max-width:1400px;
+    grid-template-columns:1fr 1fr;
+    grid-template-rows:auto 1fr;
+    grid-template-areas:
+      "clock agent"
+      "laps  laps";
+    align-items:start;
+    gap:16px 24px;
+  }
+  .clock{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:16px;
+  }
+  .controls{
+    position:static;
+    background:none;
+    padding:12px 0 0;
+    width:100%;
+    justify-content:center;
+  }
+  .agent{
+    align-self:start;
+  }
+  .laps{
+    align-self:stretch;
+  }
+  .ring{width:min(42vw,340px)}
+}
+
+/* ── Medium screens ── */
+@media (max-width:1099px) and (min-width:720px){
+  .laps{--gcols:80px 40px 96px 102px 96px minmax(100px,1fr) minmax(100px,1fr) 80px minmax(120px,1.2fr)}
+  .row,.cols{gap:8px;font-size:14px}
+  .agent{max-width:540px}
+}
+
+/* ── Mobile ── */
+@media (max-width:719px){
+  .cols{display:none}.tbl.sized{width:auto;min-width:0}
+  .row{grid-template-columns:1fr 1fr;grid-template-areas:"lap dur" "time total" "type it" "tid tid" "note note";gap:6px 12px;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .row>[data-l]::before{content:attr(data-l);display:block;font-size:11px;font-weight:700;color:var(--muted)}
+  .row .lap{grid-area:lap}.row .d{grid-area:dur;text-align:right;font-size:20px}.row .t{grid-area:time}.row .tot{grid-area:total;text-align:right}
+  .row .ty{grid-area:type}.row .it{grid-area:it}.row .tid{grid-area:tid}.row .nt{grid-area:note}.row .ses{display:none}
+  .row .lap b{font-size:18px}
+  .row .agm{display:inline;font-size:13px;color:var(--muted);font-weight:500}
+}
+.foot{max-width:1400px;margin:0 auto;padding:8px 16px 20px;text-align:center;font-size:12px;color:var(--muted)}.foot p{margin:0}
+@media (prefers-reduced-motion:reduce){.c button{transition:none}}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>PS - Time Motion Stopwatch</h1>
+  <div class="tools">
+    <button class="ib" id="gear" aria-label="Settings"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg></button>
+    <button class="ib" id="theme" aria-label="Toggle light and dark theme"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg></button>
+  </div>
+</header>
+
+<main class="app">
+  <!-- Left top: clock + controls -->
+  <section class="clock" aria-label="Timer">
+    <div class="sesbar"><b id="sdisp"></b><span id="sstate">Ready</span></div>
+    <div class="ring">
+      <svg viewBox="0 0 300 300" aria-hidden="true">
+        <circle cx="150" cy="150" r="136" fill="none" stroke="var(--track)" stroke-width="10"/>
+        <g id="ticks" stroke="var(--tick)" stroke-linecap="round"></g>
+        <circle id="arc" cx="150" cy="150" r="136" fill="none" stroke="var(--accent)" stroke-width="10" stroke-linecap="round" transform="rotate(-90 150 150)" stroke-dasharray="854.5" stroke-dashoffset="854.5"/>
+      </svg>
+      <div class="readout" role="timer" aria-live="off"><div id="digits">00:00:00</div><div id="cs">.00</div></div>
+    </div>
+    <div class="controls">
+      <div class="c"><button id="reset" aria-label="Reset" disabled><svg class="i" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>Reset</div>
+      <div class="c"><button id="end" aria-label="End session" disabled><svg class="i" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>End</div>
+      <div class="c mid"><button id="go" class="main" aria-label="Start"><svg class="i" viewBox="0 0 24 24" id="goicon"><path d="M8 5l11 7-11 7z"/></svg></button><span id="golabel">Start</span></div>
+      <div class="c"><button id="lap" aria-label="Record lap" disabled><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="14" r="7"/><path d="M12 14v-4M10 2h4M12 2v5"/></svg></button>Lap</div>
+    </div>
+  </section>
+
+  <!-- Right top: Agent / Lap Type / Issue Type / Ticket ID / Note -->
+  <section class="agent" aria-label="Agent and Task Details">
+    <div class="row-2col">
+      <div class="field">
+        <div class="field-header">
+          <label for="agent">Agent</label>
+          <span class="pill" id="lockpill" hidden>Locked</span>
+        </div>
+        <select id="agent"></select>
+      </div>
+      <div class="field">
+        <div class="field-header">
+          <label for="laptype">Lap Type</label>
+        </div>
+        <select id="laptype"><option value="">Select type</option></select>
+      </div>
+    </div>
+    <div class="row-2col">
+      <div class="field">
+        <div class="field-header">
+          <label for="issuetype">Issue Type</label>
+        </div>
+        <select id="issuetype"><option value="">Select issue type</option></select>
+      </div>
+      <div class="field">
+        <div class="field-header">
+          <label for="ticketid">Ticket ID</label>
+        </div>
+        <input type="number" id="ticketid" placeholder="Integer only" step="1">
+      </div>
+    </div>
+    <p id="ainfo"></p>
+    <div class="note-panel">
+      <label for="lapnote">Lap Note</label>
+      <textarea id="lapnote" placeholder="Type a note here — it will be attached to the next lap you record…" rows="4"></textarea>
+      <p class="note-block-msg" id="noteblock" aria-live="polite"></p>
+      <p class="note-hint">Note and Lap type are pulled into the lap log when you press Lap.</p>
+    </div>
+  </section>
+
+  <!-- Bottom: full-width laps table -->
+  <section class="laps" aria-label="Lap records">
+    <div class="lh"><div><h2>Laps</h2><span id="count">No laps yet</span></div><button class="ghost" id="csv" disabled>Export CSV</button></div>
+    <div class="scroll"><div class="tbl" id="tbl">
+    <div class="cols" role="row"><span>Session</span><span>Lap</span><span>Time</span><span>Duration</span><span>Session total</span><span>Type</span><span>Issue Type</span><span>Ticket ID</span><span>Notes</span></div>
+    <ol id="list"></ol>
+    </div></div>
+    <p class="empty" id="empty">Press Start, then Lap each time an element ends.</p>
+  </section>
+</main>
+<p class="note-live" id="live" role="status"></p>
+<footer class="foot"><p>Time Motion Stopwatch Tracker v1.2.0 (Build 17), 2026 [<a href="https://github.com/isaacyew" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Isaac Yew</a> | <a href="https://www.playersupport.com/" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Player Support</a>]. Distributed under the GNU GPLv3 License. Made with ❤️.</p></footer>
+
+<dialog id="dlg">
+  <h2>Settings</h2>
+  <label for="prefix">Session name prefix</label><input id="prefix" maxlength="16">
+  <label for="nfmt">Unique code, taken from the computer clock</label>
+  <select id="nfmt"><option value="time">Time of day (HHMMSS)</option><option value="datetime">Date and time (YYMMDD-HHMMSS)</option><option value="code">Compact code (letters and digits)</option></select>
+  <p class="hint" id="nprev"></p>
+  <label for="sname">Session name</label>
+  <div class="add" style="margin-top:0"><input id="sname" maxlength="32"><button class="ghost" id="regen">Regenerate</button></div><p class="hint" id="nerr" role="alert"></p>
+  <label>Lap types</label>
+  <ul class="tl" id="tl"></ul>
+  <div class="add"><input id="newtype" placeholder="New type, e.g. Walk to bench" maxlength="30" aria-label="New lap type"><button class="pri" id="addtype">Add type</button></div>
+  <label>Issue types</label>
+  <ul class="tl" id="itl"></ul>
+  <div class="add"><input id="newissuetype" placeholder="New issue type, e.g. Bug" maxlength="30" aria-label="New issue type"><button class="pri" id="addissuetype">Add issue type</button></div>
+  <label>Agents</label>
+  <ul class="tl" id="al"></ul>
+  <div class="add"><input id="newagent" placeholder="New agent name" maxlength="30" aria-label="New agent"><button class="pri" id="addagent">Add agent</button></div>
+  <div class="add" style="justify-content:space-between;margin-top:20px"><span class="hint">Use End on the main screen to finish a session.</span><button class="pri" id="close">Done</button></div>
+</dialog>
+
+<script>
+const $=s=>document.querySelector(s);
+let acc=0,t0=0,run=false,raf=0,armed=0,st='idle',lid=0,custom=false;
+let laps=[],ends={},used=new Set(),prefix='Session',nf='time',session='';
+
+// Initial defaults while loading from /api/log
+const DEFAULT_TYPES=[{id:1,name:'Value-added'},{id:2,name:'Non-value-added'},{id:3,name:'Delay'}];
+const DEFAULT_AGENTS=[{id:1,name:'Operator A'},{id:2,name:'Operator B'},{id:3,name:'Operator C'}];
+let types=[...DEFAULT_TYPES],agents=[...DEFAULT_AGENTS],issueTypes=[],agent='';
+
+const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+const now=()=>acc+(run?performance.now()-t0:0);
+const p2=n=>String(n).padStart(2,'0');
+function hms(ms){const s=Math.floor(ms/1000);return p2(Math.floor(s/3600))+':'+p2(Math.floor(s/60)%60)+':'+p2(s%60)}
+const cs=ms=>'.'+p2(Math.floor(ms%1000/10));
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const C=854.5;
+(()=>{let h='';for(let i=0;i<60;i++){const a=i*6*Math.PI/180,big=i%5===0,r1=122,r2=big?108:115;
+h+=`<line x1="${150+r1*Math.sin(a)}" y1="${150-r1*Math.cos(a)}" x2="${150+r2*Math.sin(a)}" y2="${150-r2*Math.cos(a)}" stroke-width="${big?2.5:1.5}"/>`}
+$('#ticks').innerHTML=h})();
+
+// session naming: prefix + unique code from the computer clock
+function code(d){const t=p2(d.getHours())+p2(d.getMinutes())+p2(d.getSeconds());
+  if(nf==='datetime')return String(d.getFullYear()).slice(2)+p2(d.getMonth()+1)+p2(d.getDate())+'-'+t;
+  if(nf==='code')return d.getTime().toString(36).toUpperCase().slice(-6);
+  return t}
+function genName(){const base=(prefix.trim()||'Session')+'-'+code(new Date());let n=base,i=2;while(used.has(n))n=base+'-'+i++;return n}
+session=genName();
+
+// database sync: sessions and laps are saved through /api
+let sid={},timers={};
+function fail(){$('#live').textContent='Could not save to the database. Check your connection.'}
+async function api(method,url,body){
+  const r=await fetch(url,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
+  if(!r.ok){if(method!=='GET')fail();throw new Error(r.status)}
+  return r.status===204?null:r.json();
+}
+function sesId(name,ag){
+  if(!sid[name]){sid[name]=api('POST','/api/sessions',{name,agent:ag}).then(r=>r.id);sid[name].catch(()=>delete sid[name])}
+  return sid[name];
+}
+function saveLap(l,b){if(l.db)l.db.then(id=>api('PATCH','/api/laps/'+id,b)).catch(()=>{})}
+async function load(){
+  try{
+    const d=await api('GET','/api/log'),names={},rows=[];
+    if(Array.isArray(d.sessions)){
+      for(const s of d.sessions){names[s.id]=s.name;used.add(s.name);sid[s.name]=Promise.resolve(s.id);if(s.endedAt)ends[s.name]=s.totalMs}
+    }
+    if(Array.isArray(d.laps)){
+      for(const r of d.laps){
+        const ses=names[r.sessionId];
+        rows.push({
+          id:++lid,
+          n:r.lapNumber,
+          ses,
+          agent:(d.sessions.find(s=>s.id===r.sessionId)||{}).agent||'',
+          total:r.timeMs,
+          dur:r.durationMs,
+          type:r.type||'',
+          issueType:r.issueType||'',
+          ticketId:r.ticketId!=null?r.ticketId:null,
+          note:r.note||'',
+          db:Promise.resolve(r.id)
+        });
+      }
+      laps=laps.concat(rows.reverse());
+    }
+    // Hydrate types, agents, and issueTypes from DB if returned
+    if(Array.isArray(d.types)&&d.types.length)types=d.types;
+    if(Array.isArray(d.agents)&&d.agents.length)agents=d.agents;
+    if(Array.isArray(d.issueTypes))issueTypes=d.issueTypes;
+    if(st==='idle'&&!custom)session=genName();
+    renderTypes();renderAgents();renderIssueTypes();render();
+  }catch(e){console.warn('load() notice:',e);$('#live').textContent='Could not load saved laps from the database.'}
+}
+
+function paint(){
+  const t=now();
+  $('#digits').textContent=hms(t);$('#cs').textContent=cs(t);
+  const f=reduce?Math.floor(t/1000%60)/60:(t%60000)/60000;
+  $('#arc').style.strokeDashoffset=C*(1-f);
+}
+function loop(){paint();if(run)raf=requestAnimationFrame(loop)}
+function agentInfo(){
+  $('#ainfo').textContent=st==='active'?'Locked until you end this session':(agent?'Applies to the next session you start':(agents.length?'Select an agent to begin':'Add an agent in Settings'));
+}
+function ui(){
+  const a=st==='active';
+  $('#go').setAttribute('aria-label',run?'Pause':'Start');$('#golabel').textContent=run?'Pause':(a&&acc>0?'Resume':'Start');
+  $('#goicon').innerHTML=run?'<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>':'<path d="M8 5l11 7-11 7z"/>';
+  $('#lap').disabled=!run;$('#end').disabled=!(a&&!run);$('#reset').disabled=run||!a;
+  $('#sdisp').textContent=session;
+  const s=$('#sstate');s.textContent=run?'Recording':a?'Paused':'Ready';s.className=run?'rec':'';
+  $('#agent').disabled=a;$('.agent').classList.toggle('locked',a);$('#lockpill').hidden=!a;
+  $('#agent').title=a?'Locked until you end this session':'';agentInfo();
+}
+function toggle(){
+  if(run){acc=now();run=false;cancelAnimationFrame(raf)}
+  else{
+    if(st==='idle'){
+      if(!agent){$('#live').textContent='Please select an agent before starting the timer.';return}
+      if(!custom)session=genName();
+      used.add(session);st='active';$('#live').textContent='';
+      sesId(session,agent).catch(()=>{});
+    }
+    t0=performance.now();run=true;loop();
+  }
+  ui();paint();
+}
+function lap(){
+  if(!run)return;
+  // Pull type from quick-selector, then reset it
+  const typeVal=$('#laptype').value||'';
+  $('#laptype').value='';
+  // Issue Type and Ticket ID stay filled across laps
+  const issueTypeVal=$('#issuetype').value||'';
+  const rawTid=$('#ticketid').value.trim();
+  const ticketIdVal=rawTid&&Number.isInteger(Number(rawTid))?Number(rawTid):null;
+  // Pull note, then reset it
+  const noteVal=($('#lapnote').value||'').trim();
+  $('#lapnote').value='';
+
+  const t=now(),mine=laps.filter(l=>l.ses===session),prev=mine.length?mine[0].total:0;
+  const l={
+    id:++lid,
+    n:mine.length+1,
+    ses:session,
+    agent,
+    total:t,
+    dur:t-prev,
+    type:typeVal,
+    issueType:issueTypeVal,
+    ticketId:ticketIdVal,
+    note:noteVal
+  };
+  l.db=sesId(session,agent).then(sessionId=>api('POST','/api/laps',{
+    sessionId,
+    lapNumber:l.n,
+    timeMs:Math.round(l.total),
+    durationMs:Math.round(l.dur),
+    type:typeVal,
+    issueType:issueTypeVal,
+    ticketId:ticketIdVal,
+    note:noteVal
+  })).then(r=>r.id);
+  l.db.catch(()=>{});
+  laps.unshift(l);render();
+}
+function endSession(){
+  if(st!=='active'||run)return;
+  const done=session;ends[done]=acc;
+  sesId(done,agent).then(id=>api('PATCH','/api/sessions/'+id,{totalMs:Math.round(acc)})).catch(()=>{});
+  st='idle';acc=0;custom=false;session=genName();
+  agent='';
+  $('#live').textContent=done+' ended. Choose an agent for the next session.';
+  renderAgents();render();paint();
+}
+function reset(){
+  if(run||st!=='active')return;
+  if(laps.some(l=>l.ses===session)&&!armed){
+    armed=setTimeout(()=>{armed=0;$('#live').textContent=''},3000);
+    $('#live').textContent='Press Reset again to discard this session and its laps.';return;
+  }
+  clearTimeout(armed);armed=0;$('#live').textContent='';
+  if(sid[session]){const p=sid[session],pend=laps.filter(l=>l.ses===session&&l.db).map(l=>l.db);delete sid[session];
+    Promise.allSettled(pend).then(()=>p).then(id=>api('DELETE','/api/sessions/'+id)).catch(()=>{})}
+  laps=laps.filter(l=>l.ses!==session);delete ends[session];used.delete(session);
+  acc=0;st='idle';custom=false;session=genName();
+  agent='';
+  renderAgents();render();paint();
+}
+const total=s=>ends[s]!=null?ends[s]:((laps.find(l=>l.ses===s)||{}).total||0);
+function opts(sel){return '<option value="">Select type</option>'+types.map(t=>`<option${t.name===sel?' selected':''}>${esc(t.name)}</option>`).join('')+(sel&&!types.some(t=>t.name===sel)?`<option selected>${esc(sel)}</option>`:'')}
+function issueOpts(sel){return '<option value="">Select issue type</option>'+issueTypes.map(t=>`<option${t.name===sel?' selected':''}>${esc(t.name)}</option>`).join('')+(sel&&!issueTypes.some(t=>t.name===sel)?`<option selected>${esc(sel)}</option>`:'')}
+
+function render(){
+  $('#list').innerHTML=laps.map((l,i)=>{const T=total(l.ses),sep=i>0&&laps[i-1].ses!==l.ses;
+  return `<li class="row ${l.n%2?'odd':''}${sep?' sep':''}" data-id="${l.id}">
+  <span class="ses" data-l="Session">${esc(l.ses)}<small class="ag">${esc(l.agent||'')}</small></span>
+  <span class="lap" data-l="Lap"><b>${l.n}</b><small class="agm">${l.agent?' \u00b7 '+esc(l.agent):''}</small></span>
+  <span class="t" data-l="Time">${hms(l.total)}<span class="cs2">${cs(l.total)}</span></span>
+  <span class="d" data-l="Duration">+${hms(l.dur)}<span class="cs2">${cs(l.dur)}</span></span>
+  <span class="tot" data-l="Session total">${hms(T)}<span class="cs2">${cs(T)}</span></span>
+  <span class="ty" data-l="Type"><select class="c-type" aria-label="Type for lap ${l.n}">${opts(l.type)}</select></span>
+  <span class="it" data-l="Issue Type"><select class="c-issuetype" aria-label="Issue type for lap ${l.n}">${issueOpts(l.issueType||'')}</select></span>
+  <span class="tid" data-l="Ticket ID"><input class="c-ticket" type="number" step="1" value="${l.ticketId!=null?esc(l.ticketId):''}" placeholder="Ticket #" aria-label="Ticket ID for lap ${l.n}"></span>
+  <span class="nt" data-l="Notes"><input class="c-note" value="${esc(l.note||'')}" placeholder="Add a note" aria-label="Notes for lap ${l.n}"></span></li>`}).join('');
+  const ns=new Set(laps.map(l=>l.ses)).size;
+  $('#count').textContent=laps.length?laps.length+(laps.length>1?' laps':' lap')+' \u00b7 '+ns+(ns>1?' sessions':' session'):'No laps yet';
+  $('#empty').hidden=laps.length>0;$('#csv').disabled=!laps.length;ui();
+}
+
+$('#list').addEventListener('input',e=>{
+  const r=e.target.closest('.row');if(!r)return;
+  const l=laps.find(l=>l.id==r.dataset.id);if(!l)return;
+  if(e.target.classList.contains('c-note')){
+    l.note=e.target.value;clearTimeout(timers['n_'+l.id]);timers['n_'+l.id]=setTimeout(()=>saveLap(l,{note:l.note}),600);
+  } else if(e.target.classList.contains('c-ticket')){
+    const v=e.target.value.trim();
+    l.ticketId=v&&Number.isInteger(Number(v))?Number(v):null;
+    clearTimeout(timers['t_'+l.id]);timers['t_'+l.id]=setTimeout(()=>saveLap(l,{ticketId:l.ticketId}),600);
+  }
+});
+$('#list').addEventListener('change',e=>{
+  const r=e.target.closest('.row');if(!r)return;
+  const l=laps.find(l=>l.id==r.dataset.id);if(!l)return;
+  if(e.target.classList.contains('c-type')){
+    l.type=e.target.value;saveLap(l,{type:l.type});
+  } else if(e.target.classList.contains('c-issuetype')){
+    l.issueType=e.target.value;saveLap(l,{issueType:l.issueType});
+  }
+});
+
+$('#go').onclick=toggle;$('#lap').onclick=lap;$('#reset').onclick=reset;$('#end').onclick=endSession;
+addEventListener('keydown',e=>{if(e.target.matches('input,select,textarea')||$('#dlg').open)return;
+  if(e.code==='Space'&&e.target.tagName!=='BUTTON'){e.preventDefault();toggle()}
+  else if(e.key==='l'||e.key==='L')lap();else if(e.key==='r'||e.key==='R')reset();else if(e.key==='e'||e.key==='E')endSession()});
+
+// settings
+function setNerr(m,err){const n=$('#nerr');n.textContent=m;n.className='hint'+(err?' err':'')}
+function nameUI(){$('#nprev').textContent='Example: '+genName();ui()}
+function renderSettings(){
+  const a=st==='active';
+  $('#prefix').value=prefix;$('#nfmt').value=nf;$('#sname').value=session;$('#sname').disabled=a;$('#regen').disabled=a;
+  setNerr(a?'Names can be changed after you end this session.':'');
+  $('#nprev').textContent='Example: '+genName();
+  renderTypes();renderIssueTypes();renderAgents();
+}
+function renderTypes(){
+  const tl=$('#tl'),lt=$('#laptype');
+  tl.innerHTML=types.map(t=>`<li><span>${esc(t.name)}</span><button class="ghost" data-id="${t.id}" aria-label="Remove ${esc(t.name)}">Remove</button></li>`).join('');
+  const cur=lt.value;
+  lt.innerHTML='<option value="">Select type</option>'+types.map(t=>`<option value="${esc(t.name)}"${t.name===cur?' selected':''}>${esc(t.name)}</option>`).join('');
+}
+function renderIssueTypes(){
+  const itl=$('#itl'),it=$('#issuetype');
+  itl.innerHTML=issueTypes.map(t=>`<li><span>${esc(t.name)}</span><button class="ghost" data-id="${t.id}" aria-label="Remove ${esc(t.name)}">Remove</button></li>`).join('');
+  const cur=it.value;
+  it.innerHTML='<option value="">Select issue type</option>'+issueTypes.map(t=>`<option value="${esc(t.name)}"${t.name===cur?' selected':''}>${esc(t.name)}</option>`).join('');
+}
+function renderAgents(){
+  $('#agent').innerHTML='<option value="">Select agent</option>'+agents.map(a=>`<option value="${esc(a.name)}"${a.name===agent?' selected':''}>${esc(a.name)}</option>`).join('');
+  $('#al').innerHTML=agents.map(a=>`<li><span>${esc(a.name)}</span><button class="ghost" data-id="${a.id}" ${st==='active'&&a.name===agent?'disabled':''} aria-label="Remove ${esc(a.name)}">Remove</button></li>`).join('');
+  ui();
+}
+function regen(){if(st==='idle'&&!custom){session=genName();$('#sname').value=session;setNerr('')}nameUI()}
+$('#prefix').oninput=e=>{prefix=e.target.value.replace(/[^\w -]/g,'').slice(0,16);if(e.target.value!==prefix)e.target.value=prefix;regen()};
+$('#nfmt').onchange=e=>{nf=e.target.value;regen()};
+$('#sname').oninput=e=>{const v=e.target.value.trim();
+  if(!v)return setNerr('Enter a session name.',1);
+  if(used.has(v))return setNerr('That name is already used. Session names must be unique.',1);
+  session=v;custom=true;setNerr('');ui()};
+$('#regen').onclick=()=>{custom=false;session=genName();$('#sname').value=session;setNerr('');nameUI()};
+$('#gear').onclick=()=>{renderSettings();$('#dlg').showModal()};
+$('#dlg').onclose=()=>{$('#sname').value=session;setNerr('')};
+$('#close').onclick=()=>$('#dlg').close();
+
+$('#tl').onclick=e=>{const id=e.target.dataset.id;if(id===undefined)return;
+  api('DELETE','/api/types/'+id).then(()=>{types=types.filter(t=>t.id!=id);renderTypes();render()}).catch(()=>{})};
+function addType(){const v=$('#newtype').value.trim();if(!v||types.some(t=>t.name===v))return;
+  api('POST','/api/types',{name:v}).then(row=>{types.push({id:row.id,name:row.name});$('#newtype').value='';renderTypes();render()}).catch(()=>{})}
+$('#addtype').onclick=addType;$('#newtype').onkeydown=e=>{if(e.key==='Enter')addType()};
+
+$('#itl').onclick=e=>{const id=e.target.dataset.id;if(id===undefined)return;
+  api('DELETE','/api/issue-types/'+id).then(()=>{issueTypes=issueTypes.filter(t=>t.id!=id);renderIssueTypes();render()}).catch(()=>{})};
+function addIssueType(){const v=$('#newissuetype').value.trim();if(!v||issueTypes.some(t=>t.name===v))return;
+  api('POST','/api/issue-types',{name:v}).then(row=>{issueTypes.push({id:row.id,name:row.name});$('#newissuetype').value='';renderIssueTypes();render()}).catch(()=>{})}
+$('#addissuetype').onclick=addIssueType;$('#newissuetype').onkeydown=e=>{if(e.key==='Enter')addIssueType()};
+
+$('#agent').onchange=e=>{agent=e.target.value;agentInfo()};
+$('#al').onclick=e=>{const id=e.target.dataset.id;if(id===undefined)return;
+  const gone=agents.find(a=>a.id==id);
+  api('DELETE','/api/agents/'+id).then(()=>{agents=agents.filter(a=>a.id!=id);if(gone&&gone.name===agent)agent='';renderAgents()}).catch(()=>{})};
+function addAgent(){const v=$('#newagent').value.trim();if(!v||agents.some(a=>a.name===v))return;
+  api('POST','/api/agents',{name:v}).then(row=>{agents.push({id:row.id,name:row.name});$('#newagent').value='';renderAgents()}).catch(()=>{})}
+$('#addagent').onclick=addAgent;$('#newagent').onkeydown=e=>{if(e.key==='Enter')addAgent()};
+
+// ── Note textarea: block characters that disrupt CSV / Markdown / HTML tables ──
+(()=>{
+  // Blocked: semicolon ; | pipe | straight quotes " ' | curly quotes " " ' ' ‚ ‛ „ ‟ | backslash \
+  const BLOCKED=/[;|"'\u201C\u201D\u2018\u2019\u201A\u201B\u201E\u201F\\]/;
+  const NAMES={
+    ';':'semicolon (;)', '|':'pipe (|)',
+    '"':'double-quote (")', "'":"single-quote (')",
+    '\u201C':'left double-quote (\u201C)', '\u201D':'right double-quote (\u201D)',
+    '\u2018':'left single-quote (\u2018)', '\u2019':'right single-quote (\u2019)',
+    '\u201A':'low-9 quote (\u201A)', '\u201B':'reversed-9 quote (\u201B)',
+    '\u201E':'low double-quote (\u201E)', '\u201F':'reversed double-quote (\u201F)',
+    '\\':'backslash (\\)'
+  };
+  let blockTimer=null;
+  function showBlock(char){
+    const el=$('#noteblock');
+    const label=NAMES[char]||('character "'+char+'"');
+    el.textContent='\u26D4 '+label+' is not allowed in notes.';
+    el.classList.add('show');
+    clearTimeout(blockTimer);
+    blockTimer=setTimeout(()=>{el.classList.remove('show')},2000);
+  }
+  const ta=$('#lapnote');
+  ta.addEventListener('beforeinput',e=>{
+    if(!e.data)return;
+    for(const ch of e.data){if(BLOCKED.test(ch)){e.preventDefault();showBlock(ch);return;}}
+  });
+  ta.addEventListener('paste',e=>{
+    e.preventDefault();
+    const raw=(e.clipboardData||window.clipboardData).getData('text')||'';
+    let blocked='',clean='';
+    for(const ch of raw){if(BLOCKED.test(ch)){if(!blocked)blocked=ch;}else clean+=ch;}
+    if(blocked)showBlock(blocked);
+    const s=ta.selectionStart,en=ta.selectionEnd;
+    ta.value=ta.value.slice(0,s)+clean+ta.value.slice(en);
+    ta.selectionStart=ta.selectionEnd=s+clean.length;
+  });
+  ta.addEventListener('drop',e=>{
+    const text=e.dataTransfer?.getData('text')||'';
+    if(BLOCKED.test(text)){
+      e.preventDefault();
+      let blocked='',clean='';
+      for(const ch of text){if(BLOCKED.test(ch)){if(!blocked)blocked=ch;}else clean+=ch;}
+      if(blocked)showBlock(blocked);
+      const s=ta.selectionStart,en=ta.selectionEnd;
+      ta.value=ta.value.slice(0,s)+clean+ta.value.slice(en);
+      ta.selectionStart=ta.selectionEnd=s+clean.length;
+    }
+  });
+  ta.addEventListener('input',()=>{
+    if(BLOCKED.test(ta.value)){
+      let blocked='',clean='';
+      for(const ch of ta.value){if(BLOCKED.test(ch)){if(!blocked)blocked=ch;}else clean+=ch;}
+      if(blocked)showBlock(blocked);
+      ta.value=clean;
+    }
+  });
+})();
+
+// theme
+function setTheme(t){document.documentElement.setAttribute('data-theme',t);try{localStorage.setItem('tm-theme',t)}catch(e){}}
+$('#theme').onclick=()=>{const cur=document.documentElement.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');setTheme(cur==='dark'?'light':'dark')};
+try{const s=localStorage.getItem('tm-theme');if(s)document.documentElement.setAttribute('data-theme',s)}catch(e){}
+
+// resizable lap columns: drag a header edge, use arrow keys on it, or double-click to reset
+let colw=null;const MINW=[60,36,70,70,70,80,80,60,90];
+function applyCols(){const L=$('.laps'),T=$('#tbl');
+  if(!colw){L.style.removeProperty('--gcols');T.classList.remove('sized');return}
+  L.style.setProperty('--gcols',colw.map((w,i)=>i===colw.length-1?`minmax(${w}px,1fr)`:w+'px').join(' '));T.classList.add('sized')}
+function saveCols(){try{colw?localStorage.setItem('tm-cols',JSON.stringify(colw)):localStorage.removeItem('tm-cols')}catch(e){}}
+const heads=[...document.querySelectorAll('.cols>span')];
+const measure=()=>heads.map(h=>Math.round(h.getBoundingClientRect().width));
+function setCol(i,w){if(!colw)colw=measure();colw[i]=Math.max(MINW[i],Math.min(800,Math.round(w)));applyCols()}
+heads.forEach((h,i)=>{
+  const z=document.createElement('span');z.className='rz';z.tabIndex=0;z.setAttribute('role','separator');z.setAttribute('aria-orientation','vertical');
+  z.setAttribute('aria-label','Resize '+h.textContent+' column');z.title='Drag to resize. Double-click to reset all columns.';h.appendChild(z);
+  z.addEventListener('pointerdown',e=>{e.preventDefault();z.setPointerCapture(e.pointerId);const x0=e.clientX,w0=measure()[i];
+    z.classList.add('on');document.body.classList.add('resizing');
+    const mv=ev=>setCol(i,w0+ev.clientX-x0);
+    const up=()=>{z.removeEventListener('pointermove',mv);z.removeEventListener('pointerup',up);z.removeEventListener('pointercancel',up);z.classList.remove('on');document.body.classList.remove('resizing');saveCols()};
+    z.addEventListener('pointermove',mv);z.addEventListener('pointerup',up);z.addEventListener('pointercancel',up)});
+  z.addEventListener('keydown',e=>{const d=e.key==='ArrowRight'?10:e.key==='ArrowLeft'?-10:0;if(!d)return;e.preventDefault();e.stopPropagation();setCol(i,measure()[i]+d);saveCols()});
+  z.addEventListener('dblclick',()=>{colw=null;applyCols();saveCols()});
+});
+try{const c=JSON.parse(localStorage.getItem('tm-cols'));if(Array.isArray(c)&&c.length===heads.length&&c.every(Number.isFinite))colw=c}catch(e){}
+applyCols();
+
+// CSV export
+let dl=null;
+if(window.claude&&claude.use)claude.use('downloads').then(d=>{dl=d;if(!d)$('#csv').hidden=true}).catch(()=>{$('#csv').hidden=true});
+const cell=(v,t)=>{v=String(v==null?'':v).replace(/[\r\n]+/g,' ');if(t&&/^[=+\-@]/.test(v))v="'"+v;return /[",]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+async function exportCsv(){
+  if(!laps.length)return;
+  const f=ms=>hms(ms)+cs(ms),sec=ms=>(ms/1000).toFixed(2);
+  const rows=[['Session','Agent','Lap','Time (hh:mm:ss.cc)','Duration (hh:mm:ss.cc)','Duration (s)','Session total (hh:mm:ss.cc)','Session total (s)','Type','Issue Type','Ticket ID','Notes']]
+    .concat(laps.slice().reverse().map(l=>{const T=total(l.ses);return[l.ses,l.agent||'',l.n,f(l.total),f(l.dur),sec(l.dur),f(T),sec(T),l.type||'',l.issueType||'',l.ticketId!=null?l.ticketId:'',l.note||'']}));
+  const text='\ufeff'+rows.map((r,i)=>r.map((c,j)=>cell(c,i>0&&[0,1,8,9,10,11].includes(j))).join(',')).join('\r\n');
+  const d=new Date(),name='time-motion_'+d.toISOString().slice(0,10)+'_'+p2(d.getHours())+p2(d.getMinutes())+'.csv';
+  try{
+    if(dl)await dl.save({filename:name,data:text});
+    else{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/csv'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+    $('#live').textContent='CSV ready: '+name;
+  }catch(e){if(!e||e.code!=='declined')$('#live').textContent='Could not export the CSV in this view.'}
+}
+$('#csv').onclick=exportCsv;
+renderTypes();renderIssueTypes();renderAgents();render();paint();load();
+</script>
+</body>
+</html>
