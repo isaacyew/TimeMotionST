@@ -91,6 +91,8 @@ body.resizing{cursor:col-resize;user-select:none}
 .row b{font-weight:800}
 .empty{padding:40px 16px;text-align:center;color:var(--muted)}
 .note-live{min-height:20px;text-align:center;font-size:13px;color:var(--muted)}
+.pgbar{display:flex;align-items:center;justify-content:center;gap:12px;padding:12px 16px;border-top:1px solid var(--line);font-size:13px;font-weight:700;color:var(--muted)}
+.pgbar button{height:34px;padding:0 14px}
 dialog{border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--ink);width:min(440px,92vw);padding:20px}
 dialog::backdrop{background:rgba(10,8,16,.55)}
 dialog{max-height:90vh;overflow:auto}
@@ -200,13 +202,13 @@ dialog input{width:100%;height:40px;border:1px solid var(--line);border-radius:8
           <label for="agent">Agent</label>
           <span class="pill" id="lockpill" hidden>Locked</span>
         </div>
-        <select id="agent"></select>
+        <input id="agent" list="dl-agents" placeholder="Select or type agent..." autocomplete="off">
       </div>
       <div class="field">
         <div class="field-header">
           <label for="laptype">Lap Type</label>
         </div>
-        <select id="laptype"><option value="">Select type</option></select>
+        <input id="laptype" list="dl-laptypes" placeholder="Select or type lap type..." autocomplete="off">
       </div>
     </div>
     <div class="row-2col">
@@ -214,7 +216,7 @@ dialog input{width:100%;height:40px;border:1px solid var(--line);border-radius:8
         <div class="field-header">
           <label for="issuetype">Issue Type</label>
         </div>
-        <select id="issuetype"><option value="">Select issue type</option></select>
+        <input id="issuetype" list="dl-issuetypes" placeholder="Select or type issue type..." autocomplete="off">
       </div>
       <div class="field">
         <div class="field-header">
@@ -228,9 +230,14 @@ dialog input{width:100%;height:40px;border:1px solid var(--line);border-radius:8
       <label for="lapnote">Lap Note</label>
       <textarea id="lapnote" placeholder="Type a note here — it will be attached to the next lap you record…" rows="4"></textarea>
       <p class="note-block-msg" id="noteblock" aria-live="polite"></p>
-      <p class="note-hint">Note and Lap type are pulled into the lap log when you press Lap.</p>
+      <p class="note-hint">Notes and all other information are pulled into the lap log when you press Lap or End button.</p>
     </div>
   </section>
+
+  <!-- Datalists for dropdown suggestions (Ctrl+F searchable) -->
+  <datalist id="dl-agents"></datalist>
+  <datalist id="dl-laptypes"></datalist>
+  <datalist id="dl-issuetypes"></datalist>
 
   <!-- Bottom: full-width laps table -->
   <section class="laps" aria-label="Lap records">
@@ -239,11 +246,16 @@ dialog input{width:100%;height:40px;border:1px solid var(--line);border-radius:8
     <div class="cols" role="row"><span>Session</span><span>Lap</span><span>Time</span><span>Duration</span><span>Session total</span><span>Type</span><span>Issue Type</span><span>Ticket ID</span><span>Notes</span></div>
     <ol id="list"></ol>
     </div></div>
+    <div class="pgbar" id="pgbar" hidden>
+      <button class="ghost" id="pgprev" aria-label="Previous page">« Prev</button>
+      <span id="pginfo">Page 1 of 1</span>
+      <button class="ghost" id="pgnext" aria-label="Next page">Next »</button>
+    </div>
     <p class="empty" id="empty">Press Start, then Lap each time an element ends.</p>
   </section>
 </main>
 <p class="note-live" id="live" role="status"></p>
-<footer class="foot"><p>Time Motion Stopwatch Tracker v1.2.0 (Build 17), 2026 [<a href="https://github.com/isaacyew" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Isaac Yew</a> | <a href="https://www.playersupport.com/" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Player Support</a>]. Distributed under the GNU GPLv3 License. Made with ❤️.</p></footer>
+<footer class="foot"><p>Time Motion Stopwatch Tracker v1.3.0 (Build 18), 2026 [<a href="https://github.com/isaacyew" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Isaac Yew</a> | <a href="https://www.playersupport.com/" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Player Support</a>]. Distributed under the GNU GPLv3 License. Made with ❤️.</p></footer>
 
 <dialog id="dlg">
   <h2>Settings</h2>
@@ -270,17 +282,19 @@ const $=s=>document.querySelector(s);
 let acc=0,t0=0,run=false,raf=0,armed=0,st='idle',lid=0,custom=false;
 let laps=[],ends={},used=new Set(),prefix='Session',nf='time',session='';
 
-// Initial defaults while loading from /api/log
-const DEFAULT_TYPES=[{id:1,name:'Value-added'},{id:2,name:'Non-value-added'},{id:3,name:'Delay'}];
-const DEFAULT_AGENTS=[{id:1,name:'Operator A'},{id:2,name:'Operator B'},{id:3,name:'Operator C'}];
-let types=[...DEFAULT_TYPES],agents=[...DEFAULT_AGENTS],issueTypes=[],agent='';
+// Fully dynamic — no hardcoded defaults so removed items stay deleted
+let types=[],agents=[],issueTypes=[],agent='';
+
+// Pagination state: 50 rows per page
+let curPage=1;
+const PAGE_SIZE=50;
 
 const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
 const now=()=>acc+(run?performance.now()-t0:0);
 const p2=n=>String(n).padStart(2,'0');
 function hms(ms){const s=Math.floor(ms/1000);return p2(Math.floor(s/3600))+':'+p2(Math.floor(s/60)%60)+':'+p2(s%60)}
 const cs=ms=>'.'+p2(Math.floor(ms%1000/10));
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const C=854.5;
 (()=>{let h='';for(let i=0;i<60;i++){const a=i*6*Math.PI/180,big=i%5===0,r1=122,r2=big?108:115;
 h+=`<line x1="${150+r1*Math.sin(a)}" y1="${150-r1*Math.cos(a)}" x2="${150+r2*Math.sin(a)}" y2="${150-r2*Math.cos(a)}" stroke-width="${big?2.5:1.5}"/>`}
@@ -311,7 +325,12 @@ async function load(){
   try{
     const d=await api('GET','/api/log'),names={},rows=[];
     if(Array.isArray(d.sessions)){
-      for(const s of d.sessions){names[s.id]=s.name;used.add(s.name);sid[s.name]=Promise.resolve(s.id);if(s.endedAt)ends[s.name]=s.totalMs}
+      for(const s of d.sessions){
+        names[s.id]=s.name;
+        used.add(s.name);
+        sid[s.name]=Promise.resolve(s.id);
+        if(s.endedAt && s.totalMs!=null) ends[s.name]=Number(s.totalMs);
+      }
     }
     if(Array.isArray(d.laps)){
       for(const r of d.laps){
@@ -321,22 +340,21 @@ async function load(){
           n:r.lapNumber,
           ses,
           agent:(d.sessions.find(s=>s.id===r.sessionId)||{}).agent||'',
-          total:r.timeMs,
-          dur:r.durationMs,
+          total:Number(r.timeMs),
+          dur:Number(r.durationMs),
           type:r.type||'',
           issueType:r.issueType||'',
-          ticketId:r.ticketId!=null?r.ticketId:null,
+          ticketId:r.ticketId!=null?Number(r.ticketId):null,
           note:r.note||'',
           db:Promise.resolve(r.id)
         });
       }
       laps=laps.concat(rows.reverse());
     }
-    // Hydrate types, agents, and issueTypes from DB if returned
-    if(Array.isArray(d.types)&&d.types.length)types=d.types;
-    if(Array.isArray(d.agents)&&d.agents.length)agents=d.agents;
-    if(Array.isArray(d.issueTypes))issueTypes=d.issueTypes;
-    if(st==='idle'&&!custom)session=genName();
+    if(Array.isArray(d.types)) types=d.types;
+    if(Array.isArray(d.agents)) agents=d.agents;
+    if(Array.isArray(d.issueTypes)) issueTypes=d.issueTypes;
+    if(st==='idle'&&!custom) session=genName();
     renderTypes();renderAgents();renderIssueTypes();render();
   }catch(e){console.warn('load() notice:',e);$('#live').textContent='Could not load saved laps from the database.'}
 }
@@ -349,7 +367,7 @@ function paint(){
 }
 function loop(){paint();if(run)raf=requestAnimationFrame(loop)}
 function agentInfo(){
-  $('#ainfo').textContent=st==='active'?'Locked until you end this session':(agent?'Applies to the next session you start':(agents.length?'Select an agent to begin':'Add an agent in Settings'));
+  $('#ainfo').textContent=st==='active'?'Locked until you end this session':(agent?'Applies to the next session you start':(agents.length?'Select or type an agent to begin':'Add an agent in Settings'));
 }
 function ui(){
   const a=st==='active';
@@ -377,10 +395,10 @@ function toggle(){
 function lap(){
   if(!run)return;
   // Pull type from quick-selector, then reset it
-  const typeVal=$('#laptype').value||'';
+  const typeVal=($('#laptype').value||'').trim();
   $('#laptype').value='';
   // Issue Type and Ticket ID stay filled across laps
-  const issueTypeVal=$('#issuetype').value||'';
+  const issueTypeVal=($('#issuetype').value||'').trim();
   const rawTid=$('#ticketid').value.trim();
   const ticketIdVal=rawTid&&Number.isInteger(Number(rawTid))?Number(rawTid):null;
   // Pull note, then reset it
@@ -411,16 +429,75 @@ function lap(){
     note:noteVal
   })).then(r=>r.id);
   l.db.catch(()=>{});
-  laps.unshift(l);render();
+  laps.unshift(l);
+  curPage=1; // jump to page 1 to see the newly recorded lap
+  render();
 }
 function endSession(){
   if(st!=='active'||run)return;
-  const done=session;ends[done]=acc;
-  sesId(done,agent).then(id=>api('PATCH','/api/sessions/'+id,{totalMs:Math.round(acc)})).catch(()=>{});
-  st='idle';acc=0;custom=false;session=genName();
+
+  // Check if there is pending information to record as a final lap
+  const t=acc;
+  const mine=laps.filter(l=>l.ses===session);
+  const prev=mine.length?mine[0].total:0;
+  const elapsedSincePrev=t-prev;
+
+  const typeVal=($('#laptype').value||'').trim();
+  const issueTypeVal=($('#issuetype').value||'').trim();
+  const rawTid=$('#ticketid').value.trim();
+  const ticketIdVal=rawTid&&Number.isInteger(Number(rawTid))?Number(rawTid):null;
+  const noteVal=($('#lapnote').value||'').trim();
+
+  const hasDetails=Boolean(typeVal||issueTypeVal||ticketIdVal!==null||noteVal);
+  const hasElapsed=elapsedSincePrev>0;
+
+  if(hasElapsed||hasDetails){
+    const l={
+      id:++lid,
+      n:mine.length+1,
+      ses:session,
+      agent,
+      total:t,
+      dur:Math.max(0,elapsedSincePrev),
+      type:typeVal,
+      issueType:issueTypeVal,
+      ticketId:ticketIdVal,
+      note:noteVal
+    };
+    l.db=sesId(session,agent).then(sessionId=>api('POST','/api/laps',{
+      sessionId,
+      lapNumber:l.n,
+      timeMs:Math.round(l.total),
+      durationMs:Math.round(l.dur),
+      type:typeVal,
+      issueType:issueTypeVal,
+      ticketId:ticketIdVal,
+      note:noteVal
+    })).then(r=>r.id);
+    l.db.catch(()=>{});
+    laps.unshift(l);
+    curPage=1;
+
+    // Reset single-use fields
+    $('#laptype').value='';
+    $('#lapnote').value='';
+  }
+
+  const done=session;
+  // Capture totalMs in a local constant before resetting acc to 0
+  const sessionTotal=Math.round(acc);
+  ends[done]=sessionTotal;
+  sesId(done,agent).then(id=>api('PATCH','/api/sessions/'+id,{totalMs:sessionTotal})).catch(()=>{});
+
+  st='idle';
+  acc=0;
+  custom=false;
+  session=genName();
   agent='';
   $('#live').textContent=done+' ended. Choose an agent for the next session.';
-  renderAgents();render();paint();
+  renderAgents();
+  render();
+  paint();
 }
 function reset(){
   if(run||st!=='active')return;
@@ -434,28 +511,52 @@ function reset(){
   laps=laps.filter(l=>l.ses!==session);delete ends[session];used.delete(session);
   acc=0;st='idle';custom=false;session=genName();
   agent='';
+  curPage=1;
   renderAgents();render();paint();
 }
 const total=s=>ends[s]!=null?ends[s]:((laps.find(l=>l.ses===s)||{}).total||0);
-function opts(sel){return '<option value="">Select type</option>'+types.map(t=>`<option${t.name===sel?' selected':''}>${esc(t.name)}</option>`).join('')+(sel&&!types.some(t=>t.name===sel)?`<option selected>${esc(sel)}</option>`:'')}
-function issueOpts(sel){return '<option value="">Select issue type</option>'+issueTypes.map(t=>`<option${t.name===sel?' selected':''}>${esc(t.name)}</option>`).join('')+(sel&&!issueTypes.some(t=>t.name===sel)?`<option selected>${esc(sel)}</option>`:'')}
+
+function renderPagination(totalItems){
+  const totalPages=Math.max(1,Math.ceil(totalItems/PAGE_SIZE));
+  if(curPage>totalPages)curPage=totalPages;
+  if(curPage<1)curPage=1;
+  const pg=$('#pgbar');
+  if(totalItems>PAGE_SIZE){
+    pg.hidden=false;
+    $('#pgprev').disabled=curPage<=1;
+    $('#pgnext').disabled=curPage>=totalPages;
+    $('#pginfo').textContent='Page '+curPage+' of '+totalPages;
+  }else{
+    pg.hidden=true;
+  }
+  const start=(curPage-1)*PAGE_SIZE;
+  const end=Math.min(start+PAGE_SIZE,totalItems);
+  return {start,end,totalPages};
+}
 
 function render(){
-  $('#list').innerHTML=laps.map((l,i)=>{const T=total(l.ses),sep=i>0&&laps[i-1].ses!==l.ses;
+  const {start,end,totalPages}=renderPagination(laps.length);
+  const visibleLaps=laps.slice(start,end);
+  $('#list').innerHTML=visibleLaps.map((l,i)=>{const T=total(l.ses),sep=i>0&&visibleLaps[i-1].ses!==l.ses;
   return `<li class="row ${l.n%2?'odd':''}${sep?' sep':''}" data-id="${l.id}">
   <span class="ses" data-l="Session">${esc(l.ses)}<small class="ag">${esc(l.agent||'')}</small></span>
   <span class="lap" data-l="Lap"><b>${l.n}</b><small class="agm">${l.agent?' \u00b7 '+esc(l.agent):''}</small></span>
   <span class="t" data-l="Time">${hms(l.total)}<span class="cs2">${cs(l.total)}</span></span>
   <span class="d" data-l="Duration">+${hms(l.dur)}<span class="cs2">${cs(l.dur)}</span></span>
   <span class="tot" data-l="Session total">${hms(T)}<span class="cs2">${cs(T)}</span></span>
-  <span class="ty" data-l="Type"><select class="c-type" aria-label="Type for lap ${l.n}">${opts(l.type)}</select></span>
-  <span class="it" data-l="Issue Type"><select class="c-issuetype" aria-label="Issue type for lap ${l.n}">${issueOpts(l.issueType||'')}</select></span>
+  <span class="ty" data-l="Type"><input class="c-type" list="dl-laptypes" value="${esc(l.type||'')}" placeholder="Type" autocomplete="off" aria-label="Type for lap ${l.n}"></span>
+  <span class="it" data-l="Issue Type"><input class="c-issuetype" list="dl-issuetypes" value="${esc(l.issueType||'')}" placeholder="Issue type" autocomplete="off" aria-label="Issue type for lap ${l.n}"></span>
   <span class="tid" data-l="Ticket ID"><input class="c-ticket" type="number" step="1" value="${l.ticketId!=null?esc(l.ticketId):''}" placeholder="Ticket #" aria-label="Ticket ID for lap ${l.n}"></span>
   <span class="nt" data-l="Notes"><input class="c-note" value="${esc(l.note||'')}" placeholder="Add a note" aria-label="Notes for lap ${l.n}"></span></li>`}).join('');
   const ns=new Set(laps.map(l=>l.ses)).size;
-  $('#count').textContent=laps.length?laps.length+(laps.length>1?' laps':' lap')+' \u00b7 '+ns+(ns>1?' sessions':' session'):'No laps yet';
+  $('#count').textContent=laps.length
+    ? `${laps.length} ${laps.length>1?'laps':'lap'} · ${ns} ${ns>1?'sessions':'session'} · Showing ${start+1}–${end} (Page ${curPage} of ${totalPages})`
+    : 'No laps yet';
   $('#empty').hidden=laps.length>0;$('#csv').disabled=!laps.length;ui();
 }
+
+$('#pgprev').onclick=()=>{if(curPage>1){curPage--;render();}};
+$('#pgnext').onclick=()=>{const totalPages=Math.ceil(laps.length/PAGE_SIZE);if(curPage<totalPages){curPage++;render();}};
 
 $('#list').addEventListener('input',e=>{
   const r=e.target.closest('.row');if(!r)return;
@@ -466,15 +567,21 @@ $('#list').addEventListener('input',e=>{
     const v=e.target.value.trim();
     l.ticketId=v&&Number.isInteger(Number(v))?Number(v):null;
     clearTimeout(timers['t_'+l.id]);timers['t_'+l.id]=setTimeout(()=>saveLap(l,{ticketId:l.ticketId}),600);
+  } else if(e.target.classList.contains('c-type')){
+    l.type=e.target.value.trim();
+    clearTimeout(timers['ty_'+l.id]);timers['ty_'+l.id]=setTimeout(()=>saveLap(l,{type:l.type}),600);
+  } else if(e.target.classList.contains('c-issuetype')){
+    l.issueType=e.target.value.trim();
+    clearTimeout(timers['it_'+l.id]);timers['it_'+l.id]=setTimeout(()=>saveLap(l,{issueType:l.issueType}),600);
   }
 });
 $('#list').addEventListener('change',e=>{
   const r=e.target.closest('.row');if(!r)return;
   const l=laps.find(l=>l.id==r.dataset.id);if(!l)return;
   if(e.target.classList.contains('c-type')){
-    l.type=e.target.value;saveLap(l,{type:l.type});
+    l.type=e.target.value.trim();saveLap(l,{type:l.type});
   } else if(e.target.classList.contains('c-issuetype')){
-    l.issueType=e.target.value;saveLap(l,{issueType:l.issueType});
+    l.issueType=e.target.value.trim();saveLap(l,{issueType:l.issueType});
   }
 });
 
@@ -494,20 +601,17 @@ function renderSettings(){
   renderTypes();renderIssueTypes();renderAgents();
 }
 function renderTypes(){
-  const tl=$('#tl'),lt=$('#laptype');
-  tl.innerHTML=types.map(t=>`<li><span>${esc(t.name)}</span><button class="ghost" data-id="${t.id}" aria-label="Remove ${esc(t.name)}">Remove</button></li>`).join('');
-  const cur=lt.value;
-  lt.innerHTML='<option value="">Select type</option>'+types.map(t=>`<option value="${esc(t.name)}"${t.name===cur?' selected':''}>${esc(t.name)}</option>`).join('');
+  $('#tl').innerHTML=types.map(t=>`<li><span>${esc(t.name)}</span><button class="ghost" data-id="${t.id}" aria-label="Remove ${esc(t.name)}">Remove</button></li>`).join('');
+  $('#dl-laptypes').innerHTML=types.map(t=>`<option value="${esc(t.name)}">`).join('');
 }
 function renderIssueTypes(){
-  const itl=$('#itl'),it=$('#issuetype');
-  itl.innerHTML=issueTypes.map(t=>`<li><span>${esc(t.name)}</span><button class="ghost" data-id="${t.id}" aria-label="Remove ${esc(t.name)}">Remove</button></li>`).join('');
-  const cur=it.value;
-  it.innerHTML='<option value="">Select issue type</option>'+issueTypes.map(t=>`<option value="${esc(t.name)}"${t.name===cur?' selected':''}>${esc(t.name)}</option>`).join('');
+  $('#itl').innerHTML=issueTypes.map(t=>`<li><span>${esc(t.name)}</span><button class="ghost" data-id="${t.id}" aria-label="Remove ${esc(t.name)}">Remove</button></li>`).join('');
+  $('#dl-issuetypes').innerHTML=issueTypes.map(t=>`<option value="${esc(t.name)}">`).join('');
 }
 function renderAgents(){
-  $('#agent').innerHTML='<option value="">Select agent</option>'+agents.map(a=>`<option value="${esc(a.name)}"${a.name===agent?' selected':''}>${esc(a.name)}</option>`).join('');
   $('#al').innerHTML=agents.map(a=>`<li><span>${esc(a.name)}</span><button class="ghost" data-id="${a.id}" ${st==='active'&&a.name===agent?'disabled':''} aria-label="Remove ${esc(a.name)}">Remove</button></li>`).join('');
+  $('#dl-agents').innerHTML=agents.map(a=>`<option value="${esc(a.name)}">`).join('');
+  $('#agent').value=agent;
   ui();
 }
 function regen(){if(st==='idle'&&!custom){session=genName();$('#sname').value=session;setNerr('')}nameUI()}
@@ -534,7 +638,8 @@ function addIssueType(){const v=$('#newissuetype').value.trim();if(!v||issueType
   api('POST','/api/issue-types',{name:v}).then(row=>{issueTypes.push({id:row.id,name:row.name});$('#newissuetype').value='';renderIssueTypes();render()}).catch(()=>{})}
 $('#addissuetype').onclick=addIssueType;$('#newissuetype').onkeydown=e=>{if(e.key==='Enter')addIssueType()};
 
-$('#agent').onchange=e=>{agent=e.target.value;agentInfo()};
+$('#agent').oninput=e=>{agent=e.target.value.trim();agentInfo()};
+$('#agent').onchange=e=>{agent=e.target.value.trim();agentInfo()};
 $('#al').onclick=e=>{const id=e.target.dataset.id;if(id===undefined)return;
   const gone=agents.find(a=>a.id==id);
   api('DELETE','/api/agents/'+id).then(()=>{agents=agents.filter(a=>a.id!=id);if(gone&&gone.name===agent)agent='';renderAgents()}).catch(()=>{})};
@@ -544,7 +649,6 @@ $('#addagent').onclick=addAgent;$('#newagent').onkeydown=e=>{if(e.key==='Enter')
 
 // ── Note textarea: block characters that disrupt CSV / Markdown / HTML tables ──
 (()=>{
-  // Blocked: semicolon ; | pipe | straight quotes " ' | curly quotes " " ' ' ‚ ‛ „ ‟ | backslash \
   const BLOCKED=/[;|"'\u201C\u201D\u2018\u2019\u201A\u201B\u201E\u201F\\]/;
   const NAMES={
     ';':'semicolon (;)', '|':'pipe (|)',
@@ -629,16 +733,20 @@ heads.forEach((h,i)=>{
 try{const c=JSON.parse(localStorage.getItem('tm-cols'));if(Array.isArray(c)&&c.length===heads.length&&c.every(Number.isFinite))colw=c}catch(e){}
 applyCols();
 
-// CSV export
+// CSV export: clean export without single-quote prefixes on notes
 let dl=null;
 if(window.claude&&claude.use)claude.use('downloads').then(d=>{dl=d;if(!d)$('#csv').hidden=true}).catch(()=>{$('#csv').hidden=true});
-const cell=(v,t)=>{v=String(v==null?'':v).replace(/[\r\n]+/g,' ');if(t&&/^[=+\-@]/.test(v))v="'"+v;return /[",]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+const cell=(v,isFormulaRisk)=>{
+  let s=String(v==null?'':v).replace(/[\r\n]+/g,' ');
+  if(isFormulaRisk&&s.startsWith('='))s="'"+s;
+  return /[",]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+};
 async function exportCsv(){
   if(!laps.length)return;
   const f=ms=>hms(ms)+cs(ms),sec=ms=>(ms/1000).toFixed(2);
   const rows=[['Session','Agent','Lap','Time (hh:mm:ss.cc)','Duration (hh:mm:ss.cc)','Duration (s)','Session total (hh:mm:ss.cc)','Session total (s)','Type','Issue Type','Ticket ID','Notes']]
     .concat(laps.slice().reverse().map(l=>{const T=total(l.ses);return[l.ses,l.agent||'',l.n,f(l.total),f(l.dur),sec(l.dur),f(T),sec(T),l.type||'',l.issueType||'',l.ticketId!=null?l.ticketId:'',l.note||'']}));
-  const text='\ufeff'+rows.map((r,i)=>r.map((c,j)=>cell(c,i>0&&[0,1,8,9,10,11].includes(j))).join(',')).join('\r\n');
+  const text='\ufeff'+rows.map((r,i)=>r.map((c,j)=>cell(c,i>0&&j===0)).join(',')).join('\r\n');
   const d=new Date(),name='time-motion_'+d.toISOString().slice(0,10)+'_'+p2(d.getHours())+p2(d.getMinutes())+'.csv';
   try{
     if(dl)await dl.save({filename:name,data:text});

@@ -64,20 +64,6 @@ async function ensureTables() {
           "created_at" timestamp DEFAULT now() NOT NULL
         )
       `);
-      await db.execute(sql`
-        INSERT INTO "lap_types" ("name") VALUES
-          ('Value-added'),
-          ('Non-value-added'),
-          ('Delay')
-        ON CONFLICT DO NOTHING
-      `);
-      await db.execute(sql`
-        INSERT INTO "agents" ("name") VALUES
-          ('Operator A'),
-          ('Operator B'),
-          ('Operator C')
-        ON CONFLICT DO NOTHING
-      `);
     } catch (err) {
       console.warn("ensureTables fallback warning:", err);
     }
