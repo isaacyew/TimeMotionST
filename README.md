@@ -1,4 +1,4 @@
-# PS - Time Motion Stopwatch Tracker
+# Time Motion Stopwatch Tracker
 
 > A dedicated, high-precision Time and Motion study tracker engineered specifically for Customer Support (CS), Player Support, and CX operational workflows.
 
@@ -14,7 +14,7 @@ In Customer Support and Player Support operations, optimizing handle time, ident
 Standard stopwatches and interval timers are built for athletics, cooking, or general productivity (Pomodoro). They completely lack the domain-specific tools needed to analyze support operations:
 - Tracking specific **Ticket IDs** alongside split times.
 - Distinguishing between **Value-Added**, **Non-Value-Added**, and **Delay** work elements.
-- Categorizing granular actions across multiple tools (e.g., Helpshift, CRM, Jira, internal player lookups, Slack, documentation).
+- Categorizing granular actions across multiple tools
 - Correlating operational friction with specific **Issue Types** and **Agents**.
 - Capturing multiline operational notes without breaking CSV exports or table layouts.
 
@@ -33,20 +33,17 @@ Standard stopwatches and interval timers are built for athletics, cooking, or ge
 
 ## ✨ Key Features
 
-- **High-Precision Timing**: Split-second hundredths-of-a-second readout (`HH:MM:SS.cc`) with visual progress ring.
 - **Session-Based Architecture**: Group lap elements into named sessions with operator/agent assignments. Automatic naming with date/time or compact clock codes.
-- **Smart "End Session" Capture**: Automatically detects any pending elapsed time or notes when "End" is pressed, logging the final lap cleanly before terminating the session.
-- **Agent, Lap Type & Issue Type Management**: Fully configurable types stored persistently with instant add/remove controls directly in the settings panel.
+- **End Session Handling**: Automatically detects any pending elapsed time or notes when "End" is pressed, logging the final lap cleanly before terminating the session.
+- **Configurable Types**: Fully configurable types stored persistently with instant add/remove controls directly in the settings panel.
 - **Ticket ID Tracking**: Dedicated numeric ticket input persisted across laps for tracking multiple work elements on the same case.
 - **Auto-Formatting Note Editor**:
   - Automatically transforms dashes (`- `) into clean bullet points (`• `) for rapid note-taking.
   - Supports smart `Enter` continuation (automatically inserts the next bullet; double-enter clears the bullet).
   - Sanitizes table-breaking characters (semicolons, quotes, pipes, backslashes) with visual alerts to prevent corrupted data exports.
 - **Live Editable Laps Log**: Edit notes, Ticket IDs, Lap Types, or Issue Types inline directly in the log table. Changes are auto-saved.
-- **Ctrl+F Searchable Dropdowns**: Combobox inputs render directly into the DOM, making all dropdown values instantly searchable with your browser's native `Ctrl+F`.
-- **50-Row Pagination**: Clean pagination controls (`Showing 1–50 of N`) ensuring snappy rendering and smooth performance even with hundreds of laps.
-- **Spreadsheet-Friendly CSV Export**: Strict RFC 4180 compliant CSV export that preserves multi-line notes, formulas protection, and UTF-8 encoding.
-- **Dark / Light Theme**: One-click theme toggle with automatic OS preference detection.
+- **CSV Export**: RFC 4180 compliant, preserving multi-line notes and UTF-8 encoding.
+- **Dark / Light Theme**: One-click theme toggle
 - **Responsive Layout**: Two-column desktop dashboard for wide monitors, collapsing down to mobile-friendly card stacks for field observation.
 
 ---
@@ -93,5 +90,3 @@ Every exported session produces structured data ready for pivot tables and opera
 ## 📄 License & Attribution
 
 Distributed under the **GNU General Public License v3.0** (GNU GPLv3). See [`LICENSE`](LICENSE) for details.
-
-Developed with ❤️ by **[Isaac Yew](https://github.com/isaacyew)** in collaboration with **[Player Support](https://www.playersupport.com/)**.
