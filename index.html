@@ -90,6 +90,9 @@ body.resizing{cursor:col-resize;user-select:none}
 .row select,.row input{width:100%;height:36px;border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:0 8px}
 .row b{font-weight:800}
 .empty{padding:40px 16px;text-align:center;color:var(--muted)}
+.loading-state{display:flex;align-items:center;justify-content:center;gap:10px;padding:40px 16px;color:var(--muted);font-weight:600;font-size:14px}
+.spinner{width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 .note-live{min-height:20px;text-align:center;font-size:13px;color:var(--muted)}
 .pgbar{display:flex;align-items:center;justify-content:center;gap:12px;padding:12px 16px;border-top:1px solid var(--line);font-size:13px;font-weight:700;color:var(--muted)}
 .pgbar button{height:34px;padding:0 14px}
@@ -246,16 +249,17 @@ dialog input{width:100%;height:40px;border:1px solid var(--line);border-radius:8
     <div class="cols" role="row"><span>Session</span><span>Lap</span><span>Time</span><span>Duration</span><span>Session total</span><span>Type</span><span>Issue Type</span><span>Ticket ID</span><span>Notes</span></div>
     <ol id="list"></ol>
     </div></div>
+    <div class="loading-state" id="loading"><div class="spinner" aria-hidden="true"></div><span>Loading session logs from database...</span></div>
     <div class="pgbar" id="pgbar" hidden>
       <button class="ghost" id="pgprev" aria-label="Previous page">« Prev</button>
       <span id="pginfo">Page 1 of 1</span>
       <button class="ghost" id="pgnext" aria-label="Next page">Next »</button>
     </div>
-    <p class="empty" id="empty">Press Start, then Lap each time an element ends.</p>
+    <p class="empty" id="empty" hidden>Press Start, then Lap each time an element ends.</p>
   </section>
 </main>
 <p class="note-live" id="live" role="status"></p>
-<footer class="foot"><p>Time Motion Stopwatch Tracker v1.3.0 (Build 18), 2026 [<a href="https://github.com/isaacyew" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Isaac Yew</a> | <a href="https://www.playersupport.com/" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Player Support</a>]. Distributed under the GNU GPLv3 License. Made with ❤️.</p></footer>
+<footer class="foot"><p>Time Motion Stopwatch Tracker v1.4.0 (Build 19), 2026 [<a href="https://github.com/isaacyew" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Isaac Yew</a> | <a href="https://www.playersupport.com/" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Player Support</a>]. Distributed under the GNU GPLv3 License. Made with ❤️.</p></footer>
 
 <dialog id="dlg">
   <h2>Settings</h2>
@@ -322,6 +326,10 @@ function sesId(name,ag){
 }
 function saveLap(l,b){if(l.db)l.db.then(id=>api('PATCH','/api/laps/'+id,b)).catch(()=>{})}
 async function load(){
+  const ld=$('#loading'),em=$('#empty'),ct=$('#count');
+  if(ld)ld.hidden=false;
+  if(em)em.hidden=true;
+  if(ct)ct.textContent='Loading data...';
   try{
     const d=await api('GET','/api/log'),names={},rows=[];
     if(Array.isArray(d.sessions)){
@@ -329,7 +337,7 @@ async function load(){
         names[s.id]=s.name;
         used.add(s.name);
         sid[s.name]=Promise.resolve(s.id);
-        if(s.endedAt && s.totalMs!=null) ends[s.name]=Number(s.totalMs);
+        if(s.endedAt && s.totalMs!=null && Number(s.totalMs)>0) ends[s.name]=Number(s.totalMs);
       }
     }
     if(Array.isArray(d.laps)){
@@ -355,8 +363,14 @@ async function load(){
     if(Array.isArray(d.agents)) agents=d.agents;
     if(Array.isArray(d.issueTypes)) issueTypes=d.issueTypes;
     if(st==='idle'&&!custom) session=genName();
+    if(ld)ld.hidden=true;
     renderTypes();renderAgents();renderIssueTypes();render();
-  }catch(e){console.warn('load() notice:',e);$('#live').textContent='Could not load saved laps from the database.'}
+  }catch(e){
+    console.warn('load() notice:',e);
+    if(ld)ld.hidden=true;
+    if(em){em.hidden=false;em.textContent='Could not load saved laps from the database. Check your connection.';}
+    $('#live').textContent='Could not load saved laps from the database.';
+  }
 }
 
 function paint(){
@@ -514,7 +528,7 @@ function reset(){
   curPage=1;
   renderAgents();render();paint();
 }
-const total=s=>ends[s]!=null?ends[s]:((laps.find(l=>l.ses===s)||{}).total||0);
+const total=s=>(ends[s]!=null&&ends[s]>0)?ends[s]:Math.max(0,...laps.filter(l=>l.ses===s).map(l=>l.total||0));
 
 function renderPagination(totalItems){
   const totalPages=Math.max(1,Math.ceil(totalItems/PAGE_SIZE));
@@ -552,7 +566,7 @@ function render(){
   $('#count').textContent=laps.length
     ? `${laps.length} ${laps.length>1?'laps':'lap'} · ${ns} ${ns>1?'sessions':'session'} · Showing ${start+1}–${end} (Page ${curPage} of ${totalPages})`
     : 'No laps yet';
-  $('#empty').hidden=laps.length>0;$('#csv').disabled=!laps.length;ui();
+  const ld=$('#loading');$('#empty').hidden=laps.length>0||(ld&&!ld.hidden);$('#csv').disabled=!laps.length;ui();
 }
 
 $('#pgprev').onclick=()=>{if(curPage>1){curPage--;render();}};
@@ -562,7 +576,14 @@ $('#list').addEventListener('input',e=>{
   const r=e.target.closest('.row');if(!r)return;
   const l=laps.find(l=>l.id==r.dataset.id);if(!l)return;
   if(e.target.classList.contains('c-note')){
-    l.note=e.target.value;clearTimeout(timers['n_'+l.id]);timers['n_'+l.id]=setTimeout(()=>saveLap(l,{note:l.note}),600);
+    let v=e.target.value;
+    if(/^-\s+/.test(v)){
+      const s=e.target.selectionStart;
+      v=v.replace(/^-\s+/,'• ');
+      e.target.value=v;
+      e.target.selectionStart=e.target.selectionEnd=s;
+    }
+    l.note=v;clearTimeout(timers['n_'+l.id]);timers['n_'+l.id]=setTimeout(()=>saveLap(l,{note:l.note}),600);
   } else if(e.target.classList.contains('c-ticket')){
     const v=e.target.value.trim();
     l.ticketId=v&&Number.isInteger(Number(v))?Number(v):null;
@@ -669,6 +690,29 @@ $('#addagent').onclick=addAgent;$('#newagent').onkeydown=e=>{if(e.key==='Enter')
     blockTimer=setTimeout(()=>{el.classList.remove('show')},2000);
   }
   const ta=$('#lapnote');
+  function convertBullets(text){
+    return text.replace(/(^|\n)-\s+/g, '$1• ');
+  }
+  ta.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){
+      const val=ta.value;
+      const pos=ta.selectionStart;
+      const lineStart=val.lastIndexOf('\n',pos-1)+1;
+      const line=val.slice(lineStart,pos);
+      if(/^•\s*$/.test(line)){
+        e.preventDefault();
+        ta.value=val.slice(0,lineStart)+val.slice(pos);
+        ta.selectionStart=ta.selectionEnd=lineStart;
+        return;
+      }
+      if(/^•\s+/.test(line)){
+        e.preventDefault();
+        const ins='\n• ';
+        ta.value=val.slice(0,pos)+ins+val.slice(pos);
+        ta.selectionStart=ta.selectionEnd=pos+ins.length;
+      }
+    }
+  });
   ta.addEventListener('beforeinput',e=>{
     if(!e.data)return;
     for(const ch of e.data){if(BLOCKED.test(ch)){e.preventDefault();showBlock(ch);return;}}
@@ -679,6 +723,7 @@ $('#addagent').onclick=addAgent;$('#newagent').onkeydown=e=>{if(e.key==='Enter')
     let blocked='',clean='';
     for(const ch of raw){if(BLOCKED.test(ch)){if(!blocked)blocked=ch;}else clean+=ch;}
     if(blocked)showBlock(blocked);
+    clean=convertBullets(clean);
     const s=ta.selectionStart,en=ta.selectionEnd;
     ta.value=ta.value.slice(0,s)+clean+ta.value.slice(en);
     ta.selectionStart=ta.selectionEnd=s+clean.length;
@@ -690,17 +735,30 @@ $('#addagent').onclick=addAgent;$('#newagent').onkeydown=e=>{if(e.key==='Enter')
       let blocked='',clean='';
       for(const ch of text){if(BLOCKED.test(ch)){if(!blocked)blocked=ch;}else clean+=ch;}
       if(blocked)showBlock(blocked);
+      clean=convertBullets(clean);
       const s=ta.selectionStart,en=ta.selectionEnd;
       ta.value=ta.value.slice(0,s)+clean+ta.value.slice(en);
       ta.selectionStart=ta.selectionEnd=s+clean.length;
     }
   });
   ta.addEventListener('input',()=>{
-    if(BLOCKED.test(ta.value)){
+    let v=ta.value;
+    if(BLOCKED.test(v)){
       let blocked='',clean='';
-      for(const ch of ta.value){if(BLOCKED.test(ch)){if(!blocked)blocked=ch;}else clean+=ch;}
+      for(const ch of v){if(BLOCKED.test(ch)){if(!blocked)blocked=ch;}else clean+=ch;}
       if(blocked)showBlock(blocked);
-      ta.value=clean;
+      v=clean;
+    }
+    const pos=ta.selectionStart;
+    const lineStart=v.lastIndexOf('\n',pos-1)+1;
+    const line=v.slice(lineStart,pos);
+    if(/^-\s+$/.test(line)){
+      const replaced='• ';
+      v=v.slice(0,lineStart)+replaced+v.slice(pos);
+      ta.value=v;
+      ta.selectionStart=ta.selectionEnd=lineStart+replaced.length;
+    }else if(v!==ta.value){
+      ta.value=v;
     }
   });
 })();
@@ -733,13 +791,13 @@ heads.forEach((h,i)=>{
 try{const c=JSON.parse(localStorage.getItem('tm-cols'));if(Array.isArray(c)&&c.length===heads.length&&c.every(Number.isFinite))colw=c}catch(e){}
 applyCols();
 
-// CSV export: clean export without single-quote prefixes on notes
+// CSV export: clean export with multi-line notes preserved (RFC 4180)
 let dl=null;
 if(window.claude&&claude.use)claude.use('downloads').then(d=>{dl=d;if(!d)$('#csv').hidden=true}).catch(()=>{$('#csv').hidden=true});
 const cell=(v,isFormulaRisk)=>{
-  let s=String(v==null?'':v).replace(/[\r\n]+/g,' ');
+  let s=String(v==null?'':v);
   if(isFormulaRisk&&s.startsWith('='))s="'"+s;
-  return /[",]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+  return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
 };
 async function exportCsv(){
   if(!laps.length)return;
