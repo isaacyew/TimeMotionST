@@ -3,7 +3,7 @@
 > A dedicated, high-precision Time and Motion study tracker engineered specifically for Customer Support (CS), Player Support, and CX operational workflows.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.4.0-green.svg)](https://github.com/isaacyew/TimeMotionST)
+[![Version](https://img.shields.io/badge/version-2.0.0-green.svg)](https://github.com/isaacyew/TimeMotionST)
 
 ---
 
@@ -52,10 +52,10 @@ Standard stopwatches and interval timers are built for athletics, cooking, or ge
 
 | Key | Action |
 |---|---|
-| `Space` or `Enter` | **Start** / **Pause** / **Resume** timer |
-| `L` | Record **Lap** |
-| `E` | **End** session (automatically captures final lap if time elapsed) |
-| `R` | **Reset** session (with confirmation) |
+| `Alt + Q` | **Start** / **Pause** / **Resume** timer |
+| `Alt + W` | Record **Lap** |
+| `Alt + 1` | **End** session (automatically captures final lap if time elapsed) |
+| `Alt + 2` | **Reset** session (with confirmation) |
 
 ---
 

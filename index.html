@@ -8,8 +8,8 @@
 <style>
 :root{--bg:#F6F5F8;--surface:#fff;--ink:#17141F;--muted:#6B6578;--line:#E4E1EA;--accent:#6B3FE0;--on-accent:#fff;--alt:#F1EFF6;--track:#E7E2F5;--tick:#BDB6CF;
 box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121018;--surface:#1B1824;--ink:#F2EFFA;--muted:#A099B3;--line:#2E2A3A;--accent:#9B7BFF;--on-accent:#14101F;--alt:#211E2C;--track:#2B2640;--tick:#4A4361;color-scheme:dark}}
-:root[data-theme="dark"]{--bg:#121018;--surface:#1B1824;--ink:#F2EFFA;--muted:#A099B3;--line:#2E2A3A;--accent:#9B7BFF;--on-accent:#14101F;--alt:#211E2C;--track:#2B2640;--tick:#4A4361;color-scheme:dark}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#120e1e;--surface:#1B1824;--ink:#F2EFFA;--muted:#A099B3;--line:#2E2A3A;--accent:#9B7BFF;--on-accent:#14101F;--alt:#211E2C;--track:#2B2640;--tick:#4A4361;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#120e1e;--surface:#1B1824;--ink:#F2EFFA;--muted:#A099B3;--line:#2E2A3A;--accent:#9B7BFF;--on-accent:#14101F;--alt:#211E2C;--track:#2B2640;--tick:#4A4361;color-scheme:dark}
 *{box-sizing:border-box}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--bg);color:var(--ink);font:500 15px/1.4 Manrope,system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
@@ -90,10 +90,18 @@ body.resizing{cursor:col-resize;user-select:none}
 .row select,.row input{width:100%;height:36px;border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:0 8px}
 .row b{font-weight:800}
 .empty{padding:40px 16px;text-align:center;color:var(--muted)}
+[hidden]{display:none!important}
 .loading-state{display:flex;align-items:center;justify-content:center;gap:10px;padding:40px 16px;color:var(--muted);font-weight:600;font-size:14px}
+.loading-state[hidden]{display:none!important}
 .spinner{width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.note-live{min-height:20px;text-align:center;font-size:13px;color:var(--muted)}
+#toast-wrap{position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;width:max-content;max-width:min(90vw,500px)}
+.toast{pointer-events:auto;display:inline-flex;align-items:center;gap:10px;padding:10px 18px;border-radius:12px;background:var(--surface);color:var(--ink);border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,0.18);font-size:13px;font-weight:700;opacity:0;transform:translateY(-12px);transition:opacity .2s ease,transform .2s ease}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast-success{border-color:#10b981;color:#10b981}
+.toast-warning{border-color:#f59e0b;color:#f59e0b}
+.toast-error{border-color:#ef4444;color:#ef4444}
+.toast-info{border-color:var(--accent);color:var(--accent)}
 .pgbar{display:flex;align-items:center;justify-content:center;gap:12px;padding:12px 16px;border-top:1px solid var(--line);font-size:13px;font-weight:700;color:var(--muted)}
 .pgbar button{height:34px;padding:0 14px}
 dialog{border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--ink);width:min(440px,92vw);padding:20px}
@@ -169,6 +177,7 @@ dialog input{width:100%;height:40px;border:1px solid var(--line);border-radius:8
 </style>
 </head>
 <body>
+<div id="toast-wrap" aria-live="polite"></div>
 <header class="top">
   <h1>PS - Time Motion Stopwatch</h1>
   <div class="tools">
@@ -197,7 +206,7 @@ dialog input{width:100%;height:40px;border:1px solid var(--line);border-radius:8
     </div>
   </section>
 
-  <!-- Right top: Agent / Lap Type / Issue Type / Ticket ID / Note -->
+  <!-- Right top: Agent / Issue Type / Ticket ID / Lap Type / Note -->
   <section class="agent" aria-label="Agent and Task Details">
     <div class="row-2col">
       <div class="field">
@@ -209,23 +218,23 @@ dialog input{width:100%;height:40px;border:1px solid var(--line);border-radius:8
       </div>
       <div class="field">
         <div class="field-header">
-          <label for="laptype">Lap Type</label>
+          <label for="issuetype">Issue Type</label>
         </div>
-        <input id="laptype" list="dl-laptypes" placeholder="Select or type lap type..." autocomplete="off">
+        <input id="issuetype" list="dl-issuetypes" placeholder="Select or type issue type..." autocomplete="off">
       </div>
     </div>
     <div class="row-2col">
       <div class="field">
         <div class="field-header">
-          <label for="issuetype">Issue Type</label>
-        </div>
-        <input id="issuetype" list="dl-issuetypes" placeholder="Select or type issue type..." autocomplete="off">
-      </div>
-      <div class="field">
-        <div class="field-header">
           <label for="ticketid">Ticket ID</label>
         </div>
         <input type="number" id="ticketid" placeholder="Integer only" step="1">
+      </div>
+      <div class="field">
+        <div class="field-header">
+          <label for="laptype">Lap Type</label>
+        </div>
+        <input id="laptype" list="dl-laptypes" placeholder="Select or type lap type..." autocomplete="off">
       </div>
     </div>
     <p id="ainfo"></p>
@@ -258,8 +267,7 @@ dialog input{width:100%;height:40px;border:1px solid var(--line);border-radius:8
     <p class="empty" id="empty" hidden>Press Start, then Lap each time an element ends.</p>
   </section>
 </main>
-<p class="note-live" id="live" role="status"></p>
-<footer class="foot"><p>Time Motion Stopwatch Tracker v1.4.0 (Build 19), 2026 [<a href="https://github.com/isaacyew" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Isaac Yew</a> | <a href="https://www.playersupport.com/" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Player Support</a>]. Distributed under the GNU GPLv3 License. Made with ❤️.</p></footer>
+<footer class="foot"><p>Time Motion Stopwatch Tracker v2.0.0 (Build 20), 2026. By <a href="https://github.com/isaacyew" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Isaac Yew</a>. Distributed under the GNU GPLv3 License. Made with ❤️.</p></footer>
 
 <dialog id="dlg">
   <h2>Settings</h2>
@@ -284,7 +292,7 @@ dialog input{width:100%;height:40px;border:1px solid var(--line);border-radius:8
 <script>
 const $=s=>document.querySelector(s);
 let acc=0,t0=0,run=false,raf=0,armed=0,st='idle',lid=0,custom=false;
-let laps=[],ends={},used=new Set(),prefix='Session',nf='time',session='';
+let laps=[],ends={},used=new Set(),prefix='S',nf='time',session='';
 
 // Fully dynamic — no hardcoded defaults so removed items stay deleted
 let types=[],agents=[],issueTypes=[],agent='';
@@ -300,6 +308,28 @@ function hms(ms){const s=Math.floor(ms/1000);return p2(Math.floor(s/3600))+':'+p
 const cs=ms=>'.'+p2(Math.floor(ms%1000/10));
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const C=854.5;
+
+// ── Toast notification popup ──
+let toastTimer=null;
+function toast(msg,type='info'){
+  if(!msg)return;
+  const c=document.getElementById('toast-wrap');if(!c)return;
+  c.innerHTML='';
+  const t=document.createElement('div');
+  const cls=type==='success'?'toast-success':type==='warning'||type==='warn'?'toast-warning':type==='error'||type==='err'?'toast-error':'toast-info';
+  t.className='toast '+cls;
+  t.setAttribute('role',type==='error'||type==='err'||type==='warning'||type==='warn'?'alert':'status');
+  const icon=type==='success'?'✓':type==='warning'||type==='warn'?'⚠':type==='error'||type==='err'?'⛔':'ℹ';
+  t.innerHTML=`<span>${icon}</span><span>${esc(msg)}</span>`;
+  c.appendChild(t);
+  requestAnimationFrame(()=>t.classList.add('show'));
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{
+    t.classList.remove('show');
+    setTimeout(()=>{if(t.parentNode)t.parentNode.removeChild(t)},250);
+  },3500);
+}
+
 (()=>{let h='';for(let i=0;i<60;i++){const a=i*6*Math.PI/180,big=i%5===0,r1=122,r2=big?108:115;
 h+=`<line x1="${150+r1*Math.sin(a)}" y1="${150-r1*Math.cos(a)}" x2="${150+r2*Math.sin(a)}" y2="${150-r2*Math.cos(a)}" stroke-width="${big?2.5:1.5}"/>`}
 $('#ticks').innerHTML=h})();
@@ -309,12 +339,12 @@ function code(d){const t=p2(d.getHours())+p2(d.getMinutes())+p2(d.getSeconds());
   if(nf==='datetime')return String(d.getFullYear()).slice(2)+p2(d.getMonth()+1)+p2(d.getDate())+'-'+t;
   if(nf==='code')return d.getTime().toString(36).toUpperCase().slice(-6);
   return t}
-function genName(){const base=(prefix.trim()||'Session')+'-'+code(new Date());let n=base,i=2;while(used.has(n))n=base+'-'+i++;return n}
+function genName(){const base=(prefix.trim()||'S')+'-'+code(new Date());let n=base,i=2;while(used.has(n))n=base+'-'+i++;return n}
 session=genName();
 
 // database sync: sessions and laps are saved through /api
 let sid={},timers={};
-function fail(){$('#live').textContent='Could not save to the database. Check your connection.'}
+function fail(){toast('Could not save to the database. Check your connection.','error')}
 async function api(method,url,body){
   const r=await fetch(url,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
   if(!r.ok){if(method!=='GET')fail();throw new Error(r.status)}
@@ -327,7 +357,7 @@ function sesId(name,ag){
 function saveLap(l,b){if(l.db)l.db.then(id=>api('PATCH','/api/laps/'+id,b)).catch(()=>{})}
 async function load(){
   const ld=$('#loading'),em=$('#empty'),ct=$('#count');
-  if(ld)ld.hidden=false;
+  if(ld){ld.hidden=false;ld.style.display='';}
   if(em)em.hidden=true;
   if(ct)ct.textContent='Loading data...';
   try{
@@ -363,13 +393,13 @@ async function load(){
     if(Array.isArray(d.agents)) agents=d.agents;
     if(Array.isArray(d.issueTypes)) issueTypes=d.issueTypes;
     if(st==='idle'&&!custom) session=genName();
-    if(ld)ld.hidden=true;
+    if(ld){ld.hidden=true;ld.style.display='none';}
     renderTypes();renderAgents();renderIssueTypes();render();
   }catch(e){
     console.warn('load() notice:',e);
-    if(ld)ld.hidden=true;
+    if(ld){ld.hidden=true;ld.style.display='none';}
     if(em){em.hidden=false;em.textContent='Could not load saved laps from the database. Check your connection.';}
-    $('#live').textContent='Could not load saved laps from the database.';
+    toast('Could not load saved laps from the database. Check your connection.','error');
   }
 }
 
@@ -397,9 +427,9 @@ function toggle(){
   if(run){acc=now();run=false;cancelAnimationFrame(raf)}
   else{
     if(st==='idle'){
-      if(!agent){$('#live').textContent='Please select an agent before starting the timer.';return}
+      if(!agent){toast('Please select an agent before starting the timer.','warning');return}
       if(!custom)session=genName();
-      used.add(session);st='active';$('#live').textContent='';
+      used.add(session);st='active';
       sesId(session,agent).catch(()=>{});
     }
     t0=performance.now();run=true;loop();
@@ -508,7 +538,7 @@ function endSession(){
   custom=false;
   session=genName();
   agent='';
-  $('#live').textContent=done+' ended. Choose an agent for the next session.';
+  toast(done+' ended. Select an agent for the next session.','info');
   renderAgents();
   render();
   paint();
@@ -516,10 +546,10 @@ function endSession(){
 function reset(){
   if(run||st!=='active')return;
   if(laps.some(l=>l.ses===session)&&!armed){
-    armed=setTimeout(()=>{armed=0;$('#live').textContent=''},3000);
-    $('#live').textContent='Press Reset again to discard this session and its laps.';return;
+    armed=setTimeout(()=>{armed=0},3000);
+    toast('Press Reset again (Alt+2) to discard this session and its laps.','warning');return;
   }
-  clearTimeout(armed);armed=0;$('#live').textContent='';
+  clearTimeout(armed);armed=0;
   if(sid[session]){const p=sid[session],pend=laps.filter(l=>l.ses===session&&l.db).map(l=>l.db);delete sid[session];
     Promise.allSettled(pend).then(()=>p).then(id=>api('DELETE','/api/sessions/'+id)).catch(()=>{})}
   laps=laps.filter(l=>l.ses!==session);delete ends[session];used.delete(session);
@@ -566,7 +596,7 @@ function render(){
   $('#count').textContent=laps.length
     ? `${laps.length} ${laps.length>1?'laps':'lap'} · ${ns} ${ns>1?'sessions':'session'} · Showing ${start+1}–${end} (Page ${curPage} of ${totalPages})`
     : 'No laps yet';
-  const ld=$('#loading');$('#empty').hidden=laps.length>0||(ld&&!ld.hidden);$('#csv').disabled=!laps.length;ui();
+  const ld=$('#loading');if(ld&&ld.hidden)ld.style.display='none';$('#empty').hidden=laps.length>0||(ld&&!ld.hidden);$('#csv').disabled=!laps.length;ui();
 }
 
 $('#pgprev').onclick=()=>{if(curPage>1){curPage--;render();}};
@@ -607,9 +637,15 @@ $('#list').addEventListener('change',e=>{
 });
 
 $('#go').onclick=toggle;$('#lap').onclick=lap;$('#reset').onclick=reset;$('#end').onclick=endSession;
-addEventListener('keydown',e=>{if(e.target.matches('input,select,textarea')||$('#dlg').open)return;
-  if(e.code==='Space'&&e.target.tagName!=='BUTTON'){e.preventDefault();toggle()}
-  else if(e.key==='l'||e.key==='L')lap();else if(e.key==='r'||e.key==='R')reset();else if(e.key==='e'||e.key==='E')endSession()});
+addEventListener('keydown',e=>{
+  if($('#dlg').open)return;
+  if(!e.altKey||e.ctrlKey||e.metaKey)return;
+  const k=e.key.toLowerCase();
+  if(k==='q'||e.code==='KeyQ'){e.preventDefault();toggle()}
+  else if(k==='w'||e.code==='KeyW'){e.preventDefault();lap()}
+  else if(k==='1'||e.code==='Digit1'){e.preventDefault();endSession()}
+  else if(k==='2'||e.code==='Digit2'){e.preventDefault();reset()}
+});
 
 // settings
 function setNerr(m,err){const n=$('#nerr');n.textContent=m;n.className='hint'+(err?' err':'')}
@@ -684,10 +720,13 @@ $('#addagent').onclick=addAgent;$('#newagent').onkeydown=e=>{if(e.key==='Enter')
   function showBlock(char){
     const el=$('#noteblock');
     const label=NAMES[char]||('character "'+char+'"');
-    el.textContent='\u26D4 '+label+' is not allowed in notes.';
-    el.classList.add('show');
-    clearTimeout(blockTimer);
-    blockTimer=setTimeout(()=>{el.classList.remove('show')},2000);
+    if(el){
+      el.textContent='\u26D4 '+label+' is not allowed in notes.';
+      el.classList.add('show');
+      clearTimeout(blockTimer);
+      blockTimer=setTimeout(()=>{el.classList.remove('show')},2000);
+    }
+    toast(label+' is not allowed in notes.','warning');
   }
   const ta=$('#lapnote');
   function convertBullets(text){
@@ -809,8 +848,8 @@ async function exportCsv(){
   try{
     if(dl)await dl.save({filename:name,data:text});
     else{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/csv'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
-    $('#live').textContent='CSV ready: '+name;
-  }catch(e){if(!e||e.code!=='declined')$('#live').textContent='Could not export the CSV in this view.'}
+    toast('CSV ready: '+name,'success');
+  }catch(e){if(!e||e.code!=='declined')toast('Could not export the CSV in this view.','error')}
 }
 $('#csv').onclick=exportCsv;
 renderTypes();renderIssueTypes();renderAgents();render();paint();load();
